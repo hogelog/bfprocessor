@@ -1,0 +1,12 @@
+bf.cpp, bf-vm.cpp, bf-jit.cpp
+  brainf*ck interpreter written in C++ by hogelog
+
+xbyak/
+  from http://homepage1.nifty.com/herumi/soft/xbyak.html
+  version 2.29
+
+sample/
+  - hello.bf
+    from http://www.kmonos.net/alang/etc/brainfuck.php
+  - mandelbrot.b, mandelbrot-huge.b, mandelbrot-titannic.b
+    from http://esoteric.sange.fi/brainfuck/utils/mandelbrot/

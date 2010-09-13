@@ -1,7 +1,4 @@
 #include <stdio.h>
-#include <string>
-#include <sstream>
-#include <vector>
 #include <stack>
 
 #define MEMSIZE 30000
@@ -25,7 +22,6 @@ void parse(Xbyak::CodeGenerator &gen, FILE *input, int membuf[MEMSIZE]) {
 
     std::stack<int> labelStack;
     int labelNum = 0;
-    std::string label;
     int ch;
     while((ch=getc(input)) != EOF) {
         switch (ch) {

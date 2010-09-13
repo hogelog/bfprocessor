@@ -6,9 +6,3 @@ all: $(TARGETS)
 
 clean:
 	rm -f *.o $(TARGETS)
-
-bf: bf.o
-	$(CXX) -o $@ $<
-
-bf-vm: bf-vm.o
-	$(CXX) -o $@ $<

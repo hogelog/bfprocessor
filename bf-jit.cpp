@@ -15,10 +15,9 @@ void parse(Xbyak::CodeGenerator &gen, FILE *input, int membuf[MEMSIZE]) {
     gen.push(gen.ebx);
 
     Xbyak::Reg32 memreg = gen.ebx;
-    Xbyak::Reg32 eax = gen.eax;
     Xbyak::Address mem = gen.dword[memreg];
 
-    gen.mov(memreg, (int) membuf);
+    gen.mov(memreg, (Xbyak::uint32) membuf);
 
     std::stack<int> labelStack;
     int labelNum = 0;

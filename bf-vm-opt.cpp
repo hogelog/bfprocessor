@@ -8,161 +8,215 @@ struct Instruction {
     char op;
     int value;
 };
+struct ExeCode {
+    void *addr;
+    int value;
+};
 class Compiler {
     private:
-        std::vector<Instruction>* const codes;
+        std::vector<Instruction>* const insns;
         int incdec, move;
         std::stack<int> pcstack;
-        std::vector<Instruction> stackcode;
-        void flushMove() {
-            if (is_current_op('m')) {
-                codes->push_back(stackcode.back());
-                stackcode.pop_back();
-            }
-        }
-        void flushIncdec() {
-            if (is_current_op('c')) {
-                codes->push_back(stackcode.back());
-                stackcode.pop_back();
+        std::vector<Instruction> stackinsn;
+        void flush_op(char op) {
+            if (is_current_op(op)) {
+                insns->push_back(stackinsn.back());
+                stackinsn.pop_back();
             }
         }
         bool is_current_op(char op) {
-            return stackcode.size() != 0 && stackcode.back().op == op;
+            return stackinsn.size() != 0 && stackinsn.back().op == op;
+        }
+        void check_reset_zero() {
+            if (insns->size() < 3)
+                return;
+            Instruction c1 = insns->at(insns->size() - 3);
+            Instruction c2 = insns->at(insns->size() - 2);
+            Instruction c3 = insns->at(insns->size() - 1);
+            if (c1.op != '[' || c2.op != 'c' || c2.value != -1 || c3.op != ']')
+                return;
+            insns->pop_back();
+            insns->pop_back();
+            insns->pop_back();
+            push('Z', 0);
         }
         void push_stack(char op, int i) {
             if (is_current_op(op)) {
-                stackcode.back().value += i;
+                stackinsn.back().value += i;
             } else {
-                Instruction code = {op, i};
-                stackcode.push_back(code);
+                Instruction insn = {op, i};
+                stackinsn.push_back(insn);
             }
         }
     public:
-        Compiler(std::vector<Instruction>* codes) :
-            codes(codes), incdec(0), move(0) {
+        Compiler(std::vector<Instruction>* insns) :
+            insns(insns), incdec(0), move(0) {
         }
         void push_incdec(int i) {
-            flushMove();
+            flush_op('m');
             push_stack('c', i);
         }
         void push_move(int i) {
-            flushIncdec();
+            flush_op('c');
             push_stack('m', i);
         }
         void push(char op, int value) {
-            Instruction code = {op, value};
-            codes->push_back(code);
+            Instruction insn = {op, value};
+            insns->push_back(insn);
         }
         void push_simple(char op) {
-            flushMove();
-            flushIncdec();
+            flush_op('m');
+            flush_op('c');
             push(op, 0);
         }
         void push_open() {
-            flushMove();
-            flushIncdec();
-            pcstack.push(codes->size());
+            flush_op('m');
+            flush_op('c');
+            pcstack.push(insns->size());
             push('[', 0);
         }
         void push_close() {
-            flushMove();
-            flushIncdec();
+            flush_op('m');
+            flush_op('c');
             int open = pcstack.top();
-            pcstack.pop();
-            (*codes)[open].value = codes->size();
+            (*insns)[open].value = insns->size();
             push(']', open - 1);
+            check_reset_zero();
+            pcstack.pop();
+        }
+        void push_end() {
+            push_simple('\0');
         }
 };
-void parse(std::vector<Instruction> &codes, FILE *input) {
-    Compiler optimizer(&codes);
+void parse(std::vector<Instruction> &insns, FILE *input) {
+    Compiler compiler(&insns);
     int ch = 0;
     while ((ch=getc(input)) != EOF) {
         switch (ch) {
             case '+':
-                optimizer.push_incdec(1);
+                compiler.push_incdec(1);
                 break;
             case '-':
-                optimizer.push_incdec(-1);
+                compiler.push_incdec(-1);
                 break;
             case '>':
-                optimizer.push_move(1);
+                compiler.push_move(1);
                 break;
             case '<':
-                optimizer.push_move(-1);
+                compiler.push_move(-1);
                 break;
             case ',':
             case '.':
-                optimizer.push_simple(ch);
+                compiler.push_simple(ch);
                 break;
             case '[':
-                optimizer.push_open();
+                compiler.push_open();
                 break;
             case ']':
-                optimizer.push_close();
+                compiler.push_close();
                 break;
         }
     }
-    optimizer.push_simple('\0');
+    compiler.push_end();
 }
-void debug(std::vector<Instruction> &codes) {
+void debug(std::vector<Instruction> &insns) {
     for (size_t pc=0;;++pc) {
-        Instruction code = codes[pc];
-        switch(code.op) {
+        Instruction insn = insns[pc];
+        switch(insn.op) {
             case '+':
             case '-':
             case '>':
             case '<':
             case ',':
             case '.':
-                putchar(code.op);
+            case 'Z':
+                putchar(insn.op);
                 break;
             case '[':
             case ']':
             case 'c':
             case 'm':
-                putchar(code.op);
-                printf("%d", code.value);
+                putchar(insn.op);
+                printf("%d", insn.value);
                 break;
             case '\0':
                 return;
         }
     }
 }
-void execute(std::vector<Instruction> &codes, int membuf[MEMSIZE]) {
-    int *mem = membuf;
+void execute(std::vector<Instruction> &insns, int membuf[MEMSIZE]) {
+    ExeCode exec[insns.size()];
     for (size_t pc=0;;++pc) {
-        Instruction code = codes[pc];
-        switch(code.op) {
+        Instruction insn = insns[pc];
+        exec[pc].value = insn.value;
+        switch(insn.op) {
             case ',':
-                *mem = getchar();
+                exec[pc].addr = &&LABEL_GET;
                 break;
             case '.':
-                putchar(*mem);
+                exec[pc].addr = &&LABEL_PUT;
                 break;
             case '[':
-                if (*mem == 0) {
-                    pc = code.value;
-                }
+                exec[pc].addr = &&LABEL_OPEN;
                 break;
             case ']':
-                pc = code.value;
+                exec[pc].addr = &&LABEL_CLOSE;
                 break;
             case 'c':
-                *mem += code.value;
+                exec[pc].addr = &&LABEL_INCDEC;
                 break;
             case 'm':
-                mem += code.value;
+                exec[pc].addr = &&LABEL_MOVE;
+                break;
+            case 'Z':
+                exec[pc].addr = &&LABEL_RESET;
                 break;
             case '\0':
-                return;
+                exec[pc].addr = &&LABEL_END;
+                goto LABEL_START;
         }
     }
+LABEL_START:
+    int *mem = membuf;
+    int pc = -1;
+    ExeCode ecode;
+
+#define NEXT_LABEL \
+    ecode = exec[++pc]; \
+    goto *ecode.addr
+
+    NEXT_LABEL;
+LABEL_GET:
+    *mem = getchar();
+    NEXT_LABEL;
+LABEL_PUT:
+    putchar(*mem);
+    NEXT_LABEL;
+LABEL_OPEN:
+    if (*mem == 0) {
+        pc = ecode.value;
+    }
+    NEXT_LABEL;
+LABEL_CLOSE:
+    pc = ecode.value;
+    NEXT_LABEL;
+LABEL_INCDEC:
+    *mem += ecode.value;
+    NEXT_LABEL;
+LABEL_MOVE:
+    mem += ecode.value;
+    NEXT_LABEL;
+LABEL_RESET:
+    *mem = 0;
+    NEXT_LABEL;
+LABEL_END:
+    ;
 }
 int main() {
     static int membuf[MEMSIZE];
-    std::vector<Instruction> codes;
-    parse(codes, stdin);
-//    debug(codes);
-    execute(codes, membuf);
+    std::vector<Instruction> insns;
+    parse(insns, stdin);
+//    debug(insns);
+    execute(insns, membuf);
     return 0;
 }

@@ -1,6 +1,6 @@
 TARGETS = bf bf-vm bf-jit bf-vm-opt
 
-CXXFLAGS = -g -m32 -Wall -W -O2 -fno-operator-names
+CXXFLAGS = -m32 -Wall -W -O2 -fno-operator-names
 
 all: $(TARGETS)
 

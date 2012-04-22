@@ -66,6 +66,17 @@ public:
         pop(3);
         push(Instruction('C', move, calc));
     }
+    void check_mem_move() {
+        if (insns->size() < 4)
+            return;
+        Instruction c1 = at(-4), c2 = at(-3), c3 = at(-2), c4 = at(-1);
+        if (c1.op != '[' || c4.op != ']' || c2.op != 'c' || c2.value.i1 != -1 || c3.op != 'C')
+            return;
+        pop(4);
+        short move = c3.value.s2.s0;
+        short calc = c3.value.s2.s1;
+        push(Instruction('M', move, calc));
+    }
 };
 class Compiler {
 private:
@@ -107,6 +118,7 @@ public:
         insns->push_back(Instruction(']', open - 1));
         optimizer.check_reset_zero();
         pcstack.pop();
+        optimizer.check_mem_move();
     }
     void push_end() {
         push_simple('\0');
@@ -164,6 +176,7 @@ void debug(std::vector<Instruction> &insns) {
                 printf("(%d)", insn.value.i1);
                 break;
             case 'C':
+            case 'M':
                 putchar(insn.op);
                 printf("(%d,%d)", insn.value.s2.s0, insn.value.s2.s1);
                 break;
@@ -201,6 +214,9 @@ void execute(std::vector<Instruction> &insns, int membuf[MEMSIZE]) {
                 break;
             case 'C':
                 exec[pc].addr = &&LABEL_MOVE_CALC;
+                break;
+            case 'M':
+                exec[pc].addr = &&LABEL_MEM_MOVE;
                 break;
             case '\0':
                 exec[pc].addr = &&LABEL_END;
@@ -242,6 +258,10 @@ LABEL_RESET:
     NEXT_LABEL;
 LABEL_MOVE_CALC:
     mem[ecode.value.s2.s0] += ecode.value.s2.s1;
+    NEXT_LABEL;
+LABEL_MEM_MOVE:
+    mem[ecode.value.s2.s0] += *mem * ecode.value.s2.s1;
+    *mem = 0;
     NEXT_LABEL;
 LABEL_END:
     ;

@@ -155,7 +155,7 @@ void parse(std::vector<Instruction> &insns, FILE *input) {
     }
     compiler.push_end();
 }
-void debug(std::vector<Instruction> &insns) {
+void debug(std::vector<Instruction> &insns, bool verbose) {
     for (size_t pc=0;;++pc) {
         Instruction insn = insns[pc];
         switch(insn.op) {
@@ -173,12 +173,16 @@ void debug(std::vector<Instruction> &insns) {
             case 'c':
             case 'm':
                 putchar(insn.op);
-                printf("(%d)", insn.value.i1);
+                if (verbose) {
+                    printf("(%d)", insn.value.i1);
+                }
                 break;
             case 'C':
             case 'M':
                 putchar(insn.op);
-                printf("(%d,%d)", insn.value.s2.s0, insn.value.s2.s1);
+                if (verbose) {
+                    printf("(%d,%d)", insn.value.s2.s0, insn.value.s2.s1);
+                }
                 break;
             case '\0':
                 return;
@@ -270,10 +274,16 @@ int main(int argc, char *argv[]) {
     static int membuf[MEMSIZE];
     std::vector<Instruction> insns;
     parse(insns, stdin);
-    if (argc == 2 && strcmp(argv[1], "-debug") == 0) {
-        debug(insns);
-    } else {
+    if (argc == 1) {
         execute(insns, membuf);
+    } else if (argc == 2) {
+        const char *option = argv[1];
+        if (strcmp(option, "-debug") == 0) {
+            debug(insns, false);
+        } else if (strcmp(option, "-debug-verbose") == 0) {
+            debug(insns, true);
+        }
+    } else {
     }
     return 0;
 }

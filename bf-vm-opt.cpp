@@ -37,33 +37,34 @@ public:
     Optimizer(std::vector<Instruction>* const insns) :
         insns(insns) {
     }
+    void push(Instruction insn) {
+        insns->push_back(insn);
+    }
+    void pop(const int count) {
+        for (int i = 0; i < count; ++i)
+            insns->pop_back();
+    }
+    Instruction& at(const int i) {
+        return insns->at(i < 0 ? insns->size() + i : i);
+    }
     void check_reset_zero() {
         if (insns->size() < 3)
             return;
-        Instruction c1 = insns->at(insns->size() - 3);
-        Instruction c2 = insns->at(insns->size() - 2);
-        Instruction c3 = insns->at(insns->size() - 1);
+        Instruction c1 = at(-3), c2 = at(-2), c3 = at(-1);
         if (c1.op != '[' || c2.op != 'c' || c2.value.i1 != -1 || c3.op != ']')
             return;
-        insns->pop_back();
-        insns->pop_back();
-        insns->pop_back();
-        insns->push_back(Instruction('z'));
+        pop(3);
+        push(Instruction('z'));
     }
     void check_move_calc() {
         if (insns->size() < 3)
             return;
-        Instruction c1 = insns->at(insns->size() - 3);
-        Instruction c2 = insns->at(insns->size() - 2);
-        Instruction c3 = insns->at(insns->size() - 1);
+        Instruction c1 = at(-3), c2 = at(-2), c3 = at(-1);
         if (c1.op != 'm' || c2.op != 'c' || c3.op != 'm' || (-c1.value.i1 != c3.value.i1))
             return;
-        short move = c1.value.i1;
-        short calc = c2.value.i1;
-        insns->pop_back();
-        insns->pop_back();
-        insns->pop_back();
-        insns->push_back(Instruction('C', move, calc));
+        short move = c1.value.i1, calc = c2.value.i1;
+        pop(3);
+        push(Instruction('C', move, calc));
     }
 };
 class Compiler {

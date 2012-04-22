@@ -1,92 +1,115 @@
-#include <stdio.h>
+#include <cstdio>
+#include <cstring>
 #include <vector>
 #include <stack>
 
 #define MEMSIZE 30000
 
-struct Instruction {
+union Value {
+    int i1;
+    struct {
+        short s0, s1;
+    } s2;
+};
+class Instruction {
+public:
     char op;
-    int value;
+    Value value;
+    Instruction(char op) : op(op) {
+    }
+    Instruction(char op, int i1) : op(op) {
+        this->value.i1 = i1;
+    }
+    Instruction(char op, short s0, short s1) : op(op) {
+        this->value.s2.s0 = s0;
+        this->value.s2.s1 = s1;
+    }
+
 };
 struct ExeCode {
     void *addr;
-    int value;
+    Value value;
+};
+class Optimizer {
+private:
+    std::vector<Instruction>* const insns;
+public:
+    Optimizer(std::vector<Instruction>* const insns) :
+        insns(insns) {
+    }
+    void check_reset_zero() {
+        if (insns->size() < 3)
+            return;
+        Instruction c1 = insns->at(insns->size() - 3);
+        Instruction c2 = insns->at(insns->size() - 2);
+        Instruction c3 = insns->at(insns->size() - 1);
+        if (c1.op != '[' || c2.op != 'c' || c2.value.i1 != -1 || c3.op != ']')
+            return;
+        insns->pop_back();
+        insns->pop_back();
+        insns->pop_back();
+        insns->push_back(Instruction('z'));
+    }
+    void check_move_calc() {
+        if (insns->size() < 3)
+            return;
+        Instruction c1 = insns->at(insns->size() - 3);
+        Instruction c2 = insns->at(insns->size() - 2);
+        Instruction c3 = insns->at(insns->size() - 1);
+        if (c1.op != 'm' || c2.op != 'c' || c3.op != 'm' || (-c1.value.i1 != c3.value.i1))
+            return;
+        short move = c1.value.i1;
+        short calc = c2.value.i1;
+        insns->pop_back();
+        insns->pop_back();
+        insns->pop_back();
+        insns->push_back(Instruction('C', move, calc));
+    }
 };
 class Compiler {
-    private:
-        std::vector<Instruction>* const insns;
-        int incdec, move;
-        std::stack<int> pcstack;
-        std::vector<Instruction> stackinsn;
-        void flush_op(char op) {
-            if (is_current_op(op)) {
-                insns->push_back(stackinsn.back());
-                stackinsn.pop_back();
-            }
+private:
+    std::vector<Instruction>* const insns;
+    int calc, move;
+    std::stack<int> pcstack;
+    Optimizer optimizer;
+    bool is_current_op(char op) {
+        return insns->size() != 0 && insns->back().op == op;
+    }
+    void push_stack(char op, int i) {
+        if (is_current_op(op)) {
+            insns->back().value.i1 += i;
+        } else {
+            insns->push_back(Instruction(op, i));
         }
-        bool is_current_op(char op) {
-            return stackinsn.size() != 0 && stackinsn.back().op == op;
-        }
-        void check_reset_zero() {
-            if (insns->size() < 3)
-                return;
-            Instruction c1 = insns->at(insns->size() - 3);
-            Instruction c2 = insns->at(insns->size() - 2);
-            Instruction c3 = insns->at(insns->size() - 1);
-            if (c1.op != '[' || c2.op != 'c' || c2.value != -1 || c3.op != ']')
-                return;
-            insns->pop_back();
-            insns->pop_back();
-            insns->pop_back();
-            push('Z', 0);
-        }
-        void push_stack(char op, int i) {
-            if (is_current_op(op)) {
-                stackinsn.back().value += i;
-            } else {
-                Instruction insn = {op, i};
-                stackinsn.push_back(insn);
-            }
-        }
-    public:
-        Compiler(std::vector<Instruction>* insns) :
-            insns(insns), incdec(0), move(0) {
-        }
-        void push_incdec(int i) {
-            flush_op('m');
-            push_stack('c', i);
-        }
-        void push_move(int i) {
-            flush_op('c');
-            push_stack('m', i);
-        }
-        void push(char op, int value) {
-            Instruction insn = {op, value};
-            insns->push_back(insn);
-        }
-        void push_simple(char op) {
-            flush_op('m');
-            flush_op('c');
-            push(op, 0);
-        }
-        void push_open() {
-            flush_op('m');
-            flush_op('c');
-            pcstack.push(insns->size());
-            push('[', 0);
-        }
-        void push_close() {
-            flush_op('m');
-            flush_op('c');
-            int open = pcstack.top();
-            (*insns)[open].value = insns->size();
-            push(']', open - 1);
-            check_reset_zero();
-            pcstack.pop();
-        }
-        void push_end() {
-            push_simple('\0');
-        }
+    }
+public:
+    Compiler(std::vector<Instruction>* insns) :
+        insns(insns), calc(0), move(0), optimizer(insns) {
+    }
+    void push_calc(int i) {
+        push_stack('c', i);
+    }
+    void push_move(int i) {
+        push_stack('m', i);
+        optimizer.check_move_calc();
+    }
+    void push_simple(char op) {
+        insns->push_back(Instruction(op));
+    }
+    void push_open() {
+        pcstack.push(insns->size());
+        insns->push_back(Instruction('['));
+    }
+    void push_close() {
+        int open = pcstack.top();
+        (*insns)[open].value.i1 = insns->size();
+        insns->push_back(Instruction(']', open - 1));
+        optimizer.check_reset_zero();
+        pcstack.pop();
+    }
+    void push_end() {
+        push_simple('\0');
+    }
 };
 void parse(std::vector<Instruction> &insns, FILE *input) {
     Compiler compiler(&insns);
@@ -94,10 +117,10 @@ void parse(std::vector<Instruction> &insns, FILE *input) {
     while ((ch=getc(input)) != EOF) {
         switch (ch) {
             case '+':
-                compiler.push_incdec(1);
+                compiler.push_calc(1);
                 break;
             case '-':
-                compiler.push_incdec(-1);
+                compiler.push_calc(-1);
                 break;
             case '>':
                 compiler.push_move(1);
@@ -129,7 +152,7 @@ void debug(std::vector<Instruction> &insns) {
             case '<':
             case ',':
             case '.':
-            case 'Z':
+            case 'z':
                 putchar(insn.op);
                 break;
             case '[':
@@ -137,7 +160,11 @@ void debug(std::vector<Instruction> &insns) {
             case 'c':
             case 'm':
                 putchar(insn.op);
-                printf("%d", insn.value);
+                printf("(%d)", insn.value.i1);
+                break;
+            case 'C':
+                putchar(insn.op);
+                printf("(%d,%d)", insn.value.s2.s0, insn.value.s2.s1);
                 break;
             case '\0':
                 return;
@@ -163,13 +190,16 @@ void execute(std::vector<Instruction> &insns, int membuf[MEMSIZE]) {
                 exec[pc].addr = &&LABEL_CLOSE;
                 break;
             case 'c':
-                exec[pc].addr = &&LABEL_INCDEC;
+                exec[pc].addr = &&LABEL_CALC;
                 break;
             case 'm':
                 exec[pc].addr = &&LABEL_MOVE;
                 break;
-            case 'Z':
+            case 'z':
                 exec[pc].addr = &&LABEL_RESET;
+                break;
+            case 'C':
+                exec[pc].addr = &&LABEL_MOVE_CALC;
                 break;
             case '\0':
                 exec[pc].addr = &&LABEL_END;
@@ -194,29 +224,35 @@ LABEL_PUT:
     NEXT_LABEL;
 LABEL_OPEN:
     if (*mem == 0) {
-        pc = ecode.value;
+        pc = ecode.value.i1;
     }
     NEXT_LABEL;
 LABEL_CLOSE:
-    pc = ecode.value;
+    pc = ecode.value.i1;
     NEXT_LABEL;
-LABEL_INCDEC:
-    *mem += ecode.value;
+LABEL_CALC:
+    *mem += ecode.value.i1;
     NEXT_LABEL;
 LABEL_MOVE:
-    mem += ecode.value;
+    mem += ecode.value.i1;
     NEXT_LABEL;
 LABEL_RESET:
     *mem = 0;
     NEXT_LABEL;
+LABEL_MOVE_CALC:
+    mem[ecode.value.s2.s0] += ecode.value.s2.s1;
+    NEXT_LABEL;
 LABEL_END:
     ;
 }
-int main() {
+int main(int argc, char *argv[]) {
     static int membuf[MEMSIZE];
     std::vector<Instruction> insns;
     parse(insns, stdin);
-//    debug(insns);
-    execute(insns, membuf);
+    if (argc == 2 && strcmp(argv[1], "-debug") == 0) {
+        debug(insns);
+    } else {
+        execute(insns, membuf);
+    }
     return 0;
 }
